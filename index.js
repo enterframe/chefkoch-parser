@@ -15,9 +15,10 @@ const CONCURRENT_REQUESTS = 2
 const r$ = url => {
   url = url.replace(/^https:\/\/www.chefkoch.de/gm, "")
   url = `${BASE_URL}${url}`
-  yellow(`downloading ${chalk.blue.underline(url)}`)
-  // return defer(() => from(axios.get(url)))
-  return from(axios.get(url))
+  return defer(() => {
+    yellow(`downloading ${chalk.blue.underline(url)}`)
+    return from(axios.get(url))
+  })
 }
 
 // get topmost categories & categories-name
@@ -90,11 +91,12 @@ const start = () => {
     //mergeMap(generatePagedUrls),
     //mergeMap(x => from(x)), // make 1 stream per paged category-url
     map(([url]) => url), // TODO remove
-    mergeMap(url => r$(url)), // request paged category-urls
+    map(url => r$(url)), // request paged category-urls
+    mergeAll(CONCURRENT_REQUESTS), // limit concurrent requests
     map(parseRecipeUrls),
     mergeMap(x => from(x)), // make 1 stream per recipe-url
-    map(([id, url]) => iif(() => !fs.existsSync(`${RECIPES_DIR}/${id}.json`), defer(() => r$(url)))), // download recipe only if not already exists
-    mergeAll(CONCURRENT_REQUESTS),
+    map(([id, url]) => iif(() => !fs.existsSync(`${RECIPES_DIR}/${id}.json`), r$(url))), // download recipe only if not already exists
+    mergeAll(CONCURRENT_REQUESTS), // limit concurrent requests
     map(parseRecipe),
     tap(storeRecipe)
   ).subscribe(([id, fileName]) => {
