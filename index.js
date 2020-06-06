@@ -15,7 +15,7 @@ const DEBUG = false
 const RECIPES_OUTPUT_DIR = "./recipes"
 const BASE_URL = "https://www.chefkoch.de"
 const CONCURRENT_REQUESTS = 5
-const MAX_RECIPES = 100
+const MAX_RECIPES = 10000
 const INGREDIENTS_PORTIONS = 1
 
 const r$ = url => {
@@ -90,7 +90,9 @@ const parseRecipe = ({request, data}) => {
     kcalories: kcaloriesMatch && kcaloriesMatch[1].trim(),
     categories: parseRecipeCategories(data),
     tags: parseRecipeTags(header),
-    ingredients: parseRecipeIngredients(data)
+    ingredients: parseRecipeIngredients(data),
+    image: parseImage(data),
+    instructions: parseInstructions(data)
   }
   return [id, json]
 }
@@ -119,6 +121,16 @@ const parseRecipeIngredients = body => {
   return ingredients
 }
 
+const parseImage = body => {
+  const match = body.match(/https:\/\/img.chefkoch-cdn\.de\/rezepte\/(?:.*)\/bilder\/(?:.*)\/crop-960x720\//m)
+  return match && match[0]
+}
+
+const parseInstructions = body => {
+  const match = body.match(/recipeInstructions": "(.*)"/m)
+  return match && JSON.parse(`"${match[1]}"`)
+}
+
 const start = () => {
   if (DEBUG) magenta(`create directory "${RECIPES_OUTPUT_DIR}"`)
   fs.mkdirSync(RECIPES_OUTPUT_DIR, {recursive: true})
@@ -128,7 +140,7 @@ const start = () => {
     map(parseCategories), // [category-name, url]
     mergeMap(x => from(x)), // make 1 stream per category-url
     map(([, url]) => r$(url)), // request 1st category-page
-    mergeAll(CONCURRENT_REQUESTS), // limit concurrent requests
+    mergeAll(1), // limit concurrent requests
     map(parseRecipeResultsCount), // [url, count]
     map(generatePagedUrls), // [url, url, ...]
     mergeMap(x => from(x)), // make 1 stream per paged category-url
