@@ -4,19 +4,24 @@ const chalk = require('chalk')
 const striptags = require('striptags')
 const Entities = require('html-entities').AllHtmlEntities
 const entities = new Entities()
-const {from, iif, defer} = require("rxjs")
-const {takeWhile, map, tap, mergeMap, mergeAll} = require("rxjs/operators")
+const {from, iif, defer, of} = require("rxjs")
+const {takeWhile, map, tap, catchError, mergeMap, mergeAll} = require("rxjs/operators")
 
+// user
+const DEBUG                 = false         // be verbose
+const RECIPES_OUTPUT_DIR    = "./recipes"   // store recipes here
+const MAX_RECIPES_CATEGORY  = 10000         // limit recipes per category
+const MAX_RECIPES           = 100000        // limit recipes in general
+const INGREDIENTS_PORTIONS  = 1             // calculate ingredients by portions
+// technical
+const BASE_URL              = "https://www.chefkoch.de"
+const CONCURRENT_REQUESTS   = 5
+
+// logging
+const red = msg => console.log(chalk.red(msg))
 const green = msg => console.log(chalk.green(msg))
 const yellow = msg => console.log(chalk.yellow(msg))
 const magenta = msg => console.log(chalk.magenta(msg))
-
-const DEBUG = false
-const RECIPES_OUTPUT_DIR = "./recipes"
-const BASE_URL = "https://www.chefkoch.de"
-const CONCURRENT_REQUESTS = 5
-const MAX_RECIPES = 1000000
-const INGREDIENTS_PORTIONS = 1
 
 const r$ = url => {
   const regex = new RegExp(`^${BASE_URL}`,"gm");
@@ -34,12 +39,13 @@ const parseCategories = ({data}) => {
   const match = data.matchAll(regex)
   const urls = [...match].map(x => [x[2], x[1]])
   if (DEBUG) urls.forEach(([name, url]) => green(`--> ${name}: ${url}`))
-  return urls  // ["category-name", "url"]
+  return urls // ["category-name", "url"]
 }
 
 const generatePagedUrls = ([url, count]) => {
-  const step = 30 // chefkoch display 30 recipes per page
-  const pages = Math.floor(count / step)
+  const step = 30 // chefkoch displays 30 recipes per page
+  const limitPages = Math.ceil(MAX_RECIPES_CATEGORY / step)
+  const pages = Math.min(limitPages, Math.floor(count / step))
   const urls = []
   for (let i = 0; i <= pages; i++) {
     urls.push(url.replace(/(^\/rs\/s)0(.+)$/m, `$1${i * step}$2`))
@@ -66,10 +72,11 @@ const parseRecipeUrls = ({request, data}) => {
 }
 
 const storeRecipe = ([id, json]) => {
+  if (!json) return []
   const fileName = `${RECIPES_OUTPUT_DIR}/${id}.json`
   fs.writeFileSync(fileName, JSON.stringify(json, null, 2))
   if (DEBUG) green(`--> stored ${fileName}`)
-  return [id, fileName, json.title]
+  return { id, fileName, title: json.title }
 }
 
 const parseRecipe = ({request, data}) => {
@@ -131,11 +138,17 @@ const parseInstructions = body => {
   return match && JSON.parse(`"${match[1]}"`)
 }
 
+const handleError = e => {
+  red(`error: ${e.message}`)
+  return of({ error: e.message })
+}
+
 const start = () => {
   if (DEBUG) magenta(`create directory "${RECIPES_OUTPUT_DIR}"`)
   fs.mkdirSync(RECIPES_OUTPUT_DIR, {recursive: true})
 
   let recipesCount = 0
+  const recipeIndexes = {}
   r$("/rezepte/kategorien/").pipe(
     map(parseCategories), // [category-name, url]
     mergeMap(x => from(x)), // make 1 stream per category-url
@@ -145,17 +158,22 @@ const start = () => {
     map(generatePagedUrls), // [url, url, ...]
     mergeMap(x => from(x)), // make 1 stream per paged category-url
     map(url => r$(url)), // request paged category-url
-    mergeAll(2), // limit concurrent requests
+    mergeAll(1), // limit concurrent requests
     map(parseRecipeUrls), // [recipe-id, recipe-url]
     mergeMap(x => from(x)), // make 1 stream per recipe-url
-    tap(() => recipesCount++), // count recipes
+    tap(([id]) => recipeIndexes[id] = recipesCount++), // we store the index of the recipe
     map(([id, url]) => iif(() => !fs.existsSync(`${RECIPES_OUTPUT_DIR}/${id}.json`), r$(url))), // download recipe only if not already exists
     mergeAll(CONCURRENT_REQUESTS), // limit concurrent requests
     map(parseRecipe), // [id, json]
     map(storeRecipe), // [id, fileName]
+    catchError(handleError), // handle any error
     takeWhile(() => recipesCount < MAX_RECIPES)
-  ).subscribe(([id, , title]) => {
-    green(`--> finished recipe ${recipesCount}: ${title} [${id}]`)
+  ).subscribe(({ id, title, error }) => {
+    !error && green(`--> finished recipe ${recipeIndexes[id]}: ${title} [${id}]`)
+    error && red(`--> error: ${error}`)
+    delete recipeIndexes[id] // keep dictionary small
+  }, (e) => {
+  	red(`error: ${e.message}`)
   })
 }
 
