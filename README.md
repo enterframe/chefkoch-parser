@@ -6,12 +6,11 @@ scrapes recipes out of chefkoch.de
 
 ## options
 ```
-const DEBUG = false
-const RECIPES_OUTPUT_DIR = "./recipes"
-const BASE_URL = "https://www.chefkoch.de"
-const CONCURRENT_REQUESTS = 5
-const MAX_RECIPES = 100
-const INGREDIENTS_PORTIONS = 1
+const DEBUG                 = false         // be verbose
+const RECIPES_OUTPUT_DIR    = "./recipes"   // store recipes here
+const MAX_RECIPES_CATEGORY  = 10000         // limit recipes per category
+const MAX_RECIPES           = 100000        // limit recipes in general
+const INGREDIENTS_PORTIONS  = 1             // calculate ingredients by portions
 ```
 
 ## example output
