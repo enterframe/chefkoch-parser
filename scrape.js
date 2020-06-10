@@ -138,11 +138,6 @@ const parseInstructions = body => {
   return match && JSON.parse(`"${match[1]}"`)
 }
 
-const handleError = e => {
-  red(`error: ${e.message}`)
-  return of({ error: e.message })
-}
-
 const start = () => {
   if (DEBUG) magenta(`create directory "${RECIPES_OUTPUT_DIR}"`)
   fs.mkdirSync(RECIPES_OUTPUT_DIR, {recursive: true})
@@ -165,15 +160,13 @@ const start = () => {
     map(([id, url]) => iif(() => !fs.existsSync(`${RECIPES_OUTPUT_DIR}/${id}.json`), r$(url))), // download recipe only if not already exists
     mergeAll(CONCURRENT_REQUESTS), // limit concurrent requests
     map(parseRecipe), // [id, json]
-    map(storeRecipe), // [id, fileName]
-    catchError(handleError), // handle any error
+    map(storeRecipe), // {id, title, fileName, [error]}
+    catchError(e => of({ error: e.message })), // handle any error
     takeWhile(() => recipesCount < MAX_RECIPES)
   ).subscribe(({ id, title, error }) => {
     !error && green(`--> finished recipe ${recipeIndexes[id]}: ${title} [${id}]`)
     error && red(`--> error: ${error}`)
     delete recipeIndexes[id] // keep dictionary small
-  }, (e) => {
-  	red(`error: ${e.message}`)
   })
 }
 

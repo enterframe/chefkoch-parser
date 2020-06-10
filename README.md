@@ -100,3 +100,10 @@ const INGREDIENTS_PORTIONS  = 1             // calculate ingredients by portions
   "instructions": "Den Backofen auf 175 °C - 195 °C vorheizen. \n\nZuerst die Schale von den 3 Zitronen abreiben, zwei Zitronen davon auspressen. \n\nDann Eier und Zucker schaumig rühren. Das Mehl sieben und mit Vanillezucker, Backpulver, Zitronenschale und Margarine nach und nach dazugeben. Alles gut mixen. Den Teig auf ein mit Backpapier ausgelegtes Backblech streichen. In den vorgeheizten Backofen schieben und ca. 20 Min. auf der mittleren Schiene backen.\n\nNun aus dem Zitronensaft und dem Puderzucker nach und nach eine Glasur mischen - bitte sehr sparsam mit dem Zitronensaft umgehen, die Glasur muss schön dickflüssig sein.\n\nSolange der Kuchen noch warm ist, mit einer Gabel überall einstechen. Somit wird er schön saftig, denn die Glasur kann so einsickern. Dann schnell die Glasur auf dem warmen Kuchen verstreichen und auskühlen lassen."
 }
 ```
+
+## additional scripts
+`node create-db.js`
+
+creates a mongo-db and feeds it with scraped recipes.
+
+uses dotenv for mongo-credentials (don´t forget to whitelist your IP)
